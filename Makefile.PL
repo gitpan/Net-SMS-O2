@@ -7,5 +7,6 @@ WriteMakefile(
     'PREREQ_PM'		=> {
         Crypt::SSLeay   => 0,
         Net::SMS::Web   => 0,
+        URI::Escape     => 0,
     }, # e.g., Module::Name => 1.1
 );

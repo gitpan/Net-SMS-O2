@@ -1,9 +1,10 @@
 package Net::SMS::O2;
 
-$VERSION = '0.016';
+$VERSION = '0.017';
 use strict;
 
 use Net::SMS::Web;
+use URI::Escape;
 
 #------------------------------------------------------------------------------
 #
@@ -199,15 +200,19 @@ sub send_sms
 {
     my $self = shift;
 
-    $self->action( Net::SMS::Web::Action->new(
-        url     => $LOGIN_URL, 
-        method  => 'GET',
-        params  => {
-            username => $self->{username},
-            password => $self->{password},
-            numTries => '',
-        }
-    ) );
+    unless ( $self->{is_logged_in} )
+    {
+        $self->action( Net::SMS::Web::Action->new(
+            url     => $LOGIN_URL, 
+            method  => 'GET',
+            params  => {
+                username => $self->{username},
+                password => $self->{password},
+                numTries => '',
+            }
+        ) );
+        $self->{is_logged_in} = 1;
+    }
     $self->action( Net::SMS::Web::Action->new(
         url     => $SEND_URL,
         method  => 'POST',
@@ -220,16 +225,22 @@ sub send_sms
             action => 'Send',
         }
     ) );
-    $self->{status} = $self->param( 'status' );
+
+    my $cookie_params = $self->cookie( 'params' );
+    my @fields = split( '=', $cookie_params );
+    my %cookie_params = map { uri_unescape( uri_unescape( $_ ) ) } @fields;
+    $self->{status} = $cookie_params{status};
+    warn "status: $self->{status}\n";
     unless ( $self->{status} eq 'Your message has been sent successfully.' )
     {
         die "Failed to send SMS message", 
             ( $self->{status} ? ": $self->{status}" : '' ), "\n";
     }
-    my $quota = $self->param( 'quota' );
+    my $quota = $cookie_params{quota};
     ( $self->{quota} ) = 
         $quota =~ /You have (\d+) messages left to send this month./
     ;
+    warn "quota: $self->{quota}\n";
 }
 
 =head2 status
