@@ -20,6 +20,8 @@ my @options = qw(
     verbose
     quota
     audit_trail=s
+    message=s
+    file=s
 );
 
 my $cfg_file = "$ENV{HOME}/.o2cfg";
@@ -44,10 +46,19 @@ $0
     [ -verbose ]
     [ -quota ]
     [ -message message ]
+    [ -file message_file ]
 
 USAGE
 
+if ( $args{file} )
+{
+    open( FH, $args{file} ) or die "Can't open message file $args{file}\n";
+    $args{message} = join( '', <FH> );
+    close( FH );
+}
+
 my $sms = Net::SMS::O2->new( %args );
+
 if ( $args{quota} )
 {
     for my $type ( qw( free paid ) )

@@ -1,6 +1,6 @@
 package Net::SMS::O2;
 
-$VERSION = '0.019';
+$VERSION = '0.020';
 use strict;
 
 use Carp;
@@ -240,12 +240,13 @@ sub login
             password => $self->{password},
         }
     ) );
-    my $params = $self->get_form();
-    $self->action( Net::SMS::Web::Action->new(
-        url     => $LOGIN_URL2, 
-        method  => 'POST',
-        params  => $params,
-    ) );
+#    my $params = $self->get_form();
+#    $self->action( Net::SMS::Web::Action->new(
+#        url     => $LOGIN_URL2, 
+#        method  => 'POST',
+#        params  => $params,
+#    ) );
+
     $self->{is_logged_in} = 1;
 }
 
