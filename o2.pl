@@ -10,16 +10,16 @@ use strict;
 
 use Getopt::Long;
 use App::Config;
-use lib 'blib/lib';
 use Net::SMS::O2;
 
 my @options = qw(
     username=s
     password=s
     recipient=s
-    message=s
     subject=s
     verbose
+    quota
+    audit_trail=s
 );
 
 my $cfg_file = "$ENV{HOME}/.o2cfg";
@@ -27,23 +27,35 @@ my %args;
 if ( -e $cfg_file )
 {
     my $ac = App::Config->new;
-    for ( qw( password username recipient ) )
+    for ( qw( password username subject recipient ) )
     {
         $ac->define( $_ );
     }
     $ac->cfg_file( $cfg_file );
-    %args = map { $_ => $ac->get( $_ ) } qw( password username recipient );
+    %args = map { $_ => $ac->get( $_ ) } qw( password username subject recipient );
 }
 die <<USAGE unless GetOptions( \%args, @options );
 $0 
     -username <username> 
     -password <password>
     -recipient <mobile no.>
-    -message <message>
     [ -subject <subject> ]
+    [ -audit_trail <audit trail dir> ]
     [ -verbose ]
+    [ -quota ]
+    [ -message message ]
 
 USAGE
 
 my $sms = Net::SMS::O2->new( %args );
-$sms->send_sms();
+if ( $args{quota} )
+{
+    for my $type ( qw( free paid ) )
+    {
+        print $sms->quota( $type ), " $type txts remaining\n";
+    }
+}
+if ( $args{message} )
+{
+    $sms->send_sms();
+}

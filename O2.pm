@@ -1,7 +1,9 @@
 package Net::SMS::O2;
 
-$VERSION = '0.017';
+$VERSION = '0.019';
 use strict;
+
+use Carp;
 
 use Net::SMS::Web;
 use URI::Escape;
@@ -33,8 +35,6 @@ gateway (L<http://www.o2.co.uk/>).
     print "sending message to mobile number ", $sms->recipient();
 
     $sms->send_sms();
-    my $quota = $sms->quota();
-    my $status = $sms->status();
 
 =head1 DESCRIPTION
 
@@ -52,6 +52,20 @@ truncated to 115 characters. If false, the object will throw an exception
 (die). If you set notruncate to 1, then the module won't check the message
 length, and you are on your own!
 
+Pragma: no-cache
+Via: 1.0 www3 (HTTP::Proxy/0.07)
+Accept: application/vnd.ms-excel, application/msword, application/vnd.ms-powerpoint, image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, */*
+Accept-Language: en-gb
+Host: sendtxt.o2.co.uk
+Referer: http://sendtxt.o2.co.uk/webOriginate/action/viewHomePage
+User-Agent: Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0; Q312461)
+Content-Length: 128
+Content-Type: application/x-www-form-urlencoded
+Cookie: anonP3=Ave; username=awrigley; QE3=UmFuZG9tSVYa8uqjNRdebN1ccKhWTkav; rAT=qCsxqa-8q_UNEMeYxegp6dxlG3Pm_mPi; rID=44413; JSESSIONID=2flHC7azFO4dDFoUUdkrm5QD4x8ocdbpgpVzGgVVVouWlL24iKvO!-1057879407
+
+
+contacts=&msisdns=07713986247&to=07713986247&subject=test&howtosend=freetxt&message=test&replyType=inbox&enableReply=on&x=16&y=1
+
 =cut
 
 #------------------------------------------------------------------------------
@@ -62,8 +76,10 @@ length, and you are on your own!
 
 use vars qw(
     @ISA
-    $LOGIN_URL
-    $SEND_URL 
+    $LOGIN_URL1
+    $LOGIN_URL2
+    $QUOTA_URL
+    $SEND_URL
     %REQUIRED_KEYS 
     %LEGAL_KEYS 
     $MAX_CHARS
@@ -71,14 +87,14 @@ use vars qw(
 
 @ISA = qw( Net::SMS::Web );
 
-$SEND_URL = 'http://sendtxt.genie.co.uk/cgi-bin/sms/send_sms.cgi';
-$LOGIN_URL = 'https://gordon.genie.co.uk/login/mblogin';
+$SEND_URL = 'http://sendtxt.o2.co.uk/webOriginate/action/sendMessage';
+$QUOTA_URL = 'http://sendtxt.o2.co.uk/webOriginate/action/viewHomePage';
+$LOGIN_URL1 = 'https://gordon.genie.co.uk/login/mblogin';
+$LOGIN_URL2 = "https://zarkov.shop.o2.co.uk/login/bglogin";
 
 %REQUIRED_KEYS = (
     username => 1,
     password => 1,
-    recipient => 1,
-    message => 1,
 );
 
 %LEGAL_KEYS = (
@@ -88,6 +104,7 @@ $LOGIN_URL = 'https://gordon.genie.co.uk/login/mblogin';
     subject => 1,
     message => 1,
     verbose => 1,
+    audit_trail => 1,
 );
 
 $MAX_CHARS = 115;
@@ -177,7 +194,7 @@ sub AUTOLOAD
     my $key = $AUTOLOAD;
     $key =~ s/.*:://;
     return if $key eq 'DESTROY';
-    die ref($self), ": unknown method $AUTOLOAD\n" 
+    croak ref($self), ": unknown method $AUTOLOAD\n" 
         unless $LEGAL_KEYS{ $key }
     ;
     if ( defined( $value ) )
@@ -196,76 +213,84 @@ constructor arguments.
 
 =cut
 
-sub send_sms
+sub get_form
 {
     my $self = shift;
-
-    unless ( $self->{is_logged_in} )
+    my $response = $self->response();
+    my %params;
+    while ( $response =~ /name="([^"]+)"\s+value="([^"]+)"/g )
     {
-        $self->action( Net::SMS::Web::Action->new(
-            url     => $LOGIN_URL, 
-            method  => 'GET',
-            params  => {
-                username => $self->{username},
-                password => $self->{password},
-                numTries => '',
-            }
-        ) );
-        $self->{is_logged_in} = 1;
+        $params{$1} = $2;
     }
+    return \%params;
+}
+
+sub login
+{
+    my $self = shift;
+    my $dest = shift;
+
+    return if $self->{is_logged_in};
     $self->action( Net::SMS::Web::Action->new(
-        url     => $SEND_URL,
-        method  => 'POST',
+        url     => $LOGIN_URL1, 
+        method  => 'GET',
         params  => {
-            RECIPIENT => $self->{recipient},
-            SUBJECT => $self->{subject} || '',
-            MESSAGE => $self->{message},
-            check => 0,
-            left => $MAX_CHARS - $self->{message_length},
-            action => 'Send',
+            dest => $dest,
+            username => $self->{username},
+            password => $self->{password},
         }
     ) );
-
-    my $cookie_params = $self->cookie( 'params' );
-    my @fields = split( '=', $cookie_params );
-    my %cookie_params = map { uri_unescape( uri_unescape( $_ ) ) } @fields;
-    $self->{status} = $cookie_params{status};
-    warn "status: $self->{status}\n";
-    unless ( $self->{status} eq 'Your message has been sent successfully.' )
-    {
-        die "Failed to send SMS message", 
-            ( $self->{status} ? ": $self->{status}" : '' ), "\n";
-    }
-    my $quota = $cookie_params{quota};
-    ( $self->{quota} ) = 
-        $quota =~ /You have (\d+) messages left to send this month./
-    ;
-    warn "quota: $self->{quota}\n";
+    my $params = $self->get_form();
+    $self->action( Net::SMS::Web::Action->new(
+        url     => $LOGIN_URL2, 
+        method  => 'POST',
+        params  => $params,
+    ) );
+    $self->{is_logged_in} = 1;
 }
-
-=head2 status
-
-This method returns the value returned in the 'status' parameter
-
-=cut
-
-sub status
-{
-    my $self = shift;
-    return $self->{status};
-}
-
-=head2 quota
-
-This method returns the number of messages remaining in your months quota. Only
-works after send_sms has be called successfully.
-
-=cut
 
 sub quota
 {
     my $self = shift;
-    return $self->{quota};
+    my $type = shift || 'free';
+    $self->login( $QUOTA_URL );
+    $self->action( Net::SMS::Web::Action->new(
+        url     => $QUOTA_URL,
+        method  => 'GET',
+    ) );
+    if ( $self->response() =~ /Use $type TXT - you have (\d+) TXT remaining/ )
+    {
+        return $1;
+    }
+    die "Can't determine quota";
+}
+
+sub send_sms
+{
+    my $self = shift;
+
+    $self->login( $SEND_URL );
+    $self->action( Net::SMS::Web::Action->new(
+        url     => $SEND_URL,
+        method  => 'POST',
+        params  => {
+            msisdns => $self->{recipient},
+            contacts => '',
+            to => $self->{recipient},
+            subject => $self->{subject} || '',
+            howtosend => 'freetxt',
+            replyType => 'none',
+            message => $self->{message},
+        }
+    ) );
+    if ( $self->response =~ /Your message has been sent successfully/ )
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 sub _check_length
@@ -290,7 +315,7 @@ sub _check_length
         ;
         if ( $self->{message_length} > $MAX_CHARS )
         {
-            die ref($self), 
+            croak ref($self), 
                 ": total message length (subject + message)  is too long ",
                 "(> $MAX_CHARS)\n"
             ;
@@ -305,7 +330,7 @@ sub _init
 
     for ( keys %REQUIRED_KEYS )
     {
-        die ref($self), ": $_ field is required\n" unless $keys{$_};
+        croak ref($self), ": $_ field is required\n" unless $keys{$_};
     }
     for ( keys %keys )
     {
