@@ -1,12 +1,12 @@
-Net::SMS::Genie
-===============
+Net::SMS::O2
+============
 
 Description
 -----------
 
-A perl module to send SMS messages, using the Genie web2sms gateway. This
+A perl module to send SMS messages, using the O2 web2sms gateway. This
 module will only work with mobile phone numbers that have been registered with
-Genie (http://www.genie.co.uk/) and uses form submission to a URL that may be
+O2 (http://www.o2.co.uk/) and uses form submission to a URL that may be
 subject to change. The Genie service is currently only available to UK mobile
 phone users.
 
@@ -19,6 +19,21 @@ The usual ...
 > make
 [ > make test ]
 > make install
+
+Prerequisites
+-------------
+
+Net::SMS::O2 inherits from Net::SMS::Web. Net::SMS::Web requires the following
+per modules:
+
+LWP::UserAgent
+CGI::Enurl
+CGI::Lite
+URI
+
+Net::SMS::O2 accesses https addresses, so you need to have installed:
+
+Crypt::SSLeay
 
 Copyright
 ---------

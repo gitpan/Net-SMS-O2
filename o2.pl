@@ -9,6 +9,7 @@
 use strict;
 
 use Getopt::Long;
+use App::Config;
 use lib 'blib/lib';
 use Net::SMS::O2;
 
@@ -21,7 +22,18 @@ my @options = qw(
     verbose
 );
 
+my $cfg_file = "$ENV{HOME}/.o2cfg";
 my %args;
+if ( -e $cfg_file )
+{
+    my $ac = App::Config->new;
+    for ( qw( password username recipient ) )
+    {
+        $ac->define( $_ );
+    }
+    $ac->cfg_file( $cfg_file );
+    %args = map { $_ => $ac->get( $_ ) } qw( password username recipient );
+}
 die <<USAGE unless GetOptions( \%args, @options );
 $0 
     -username <username> 
